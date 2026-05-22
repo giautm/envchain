@@ -73,12 +73,39 @@ KEY_B=value_b
 $ envchain --unset aws AWS_SECRET_ACCESS_KEY
 ```
 
+### Print as JSON
+
+```
+$ envchain --json aws
+{"AWS_ACCESS_KEY_ID":"my-access-key","AWS_SECRET_ACCESS_KEY":"secret"}
+```
+
+### AWS credential_process
+
+Use envchain as an AWS SDK [credential_process](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sourcing-external.html) provider:
+
+```
+$ envchain --aws-credential aws
+{"AccessKeyId":"my-access-key","SecretAccessKey":"secret","Version":1}
+```
+
+In `~/.aws/config`:
+
+```ini
+[profile myprofile]
+credential_process = envchain --aws-credential aws
+```
+
+Supported keychain keys: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (optional), `AWS_CREDENTIAL_EXPIRATION` (optional).
+
 ### Options
 
 | Flag | Description |
 |------|-------------|
 | `--set`, `-s` | Add keychain items for a namespace |
 | `--list`, `-l` | List namespaces or keys |
+| `--json` | Print all values in a namespace as JSON |
+| `--aws-credential` | Output AWS credential_process JSON format |
 | `--unset` | Remove keychain items |
 | `--noecho`, `-n` | Do not echo input when prompting |
 | `--require-passphrase`, `-p` | Require authentication to access the item |
