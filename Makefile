@@ -4,7 +4,6 @@ BIN_PATH=$(PREFIX)/bin/$(BINARY_NAME)
 ARCH=$(shell uname -m)
 DIST_DIR=dist
 TARBALL=$(DIST_DIR)/$(BINARY_NAME)-$(ARCH)-apple-darwin.tar.gz
-
 all:
 	swift build -c release
 

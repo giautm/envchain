@@ -2,7 +2,6 @@ import Foundation
 import Security
 import Darwin
 
-private let version = "0.1.0"
 private let servicePrefix = "envchain-"
 
 // MARK: - Keychain Operations
