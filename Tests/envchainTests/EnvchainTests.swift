@@ -22,6 +22,9 @@ final class EnvchainTests: XCTestCase {
         _ = run(["--unset", testNamespace, "KEY_A"])
         _ = run(["--unset", testNamespace, "KEY_B"])
         _ = run(["--unset", testNamespace, "mixedCase_Key"])
+        _ = run(["--unset", testNamespace, "AWS_ACCESS_KEY_ID"])
+        _ = run(["--unset", testNamespace, "AWS_SECRET_ACCESS_KEY"])
+        _ = run(["--unset", testNamespace, "AWS_SESSION_TOKEN"])
     }
 
     // MARK: - Helpers
@@ -170,6 +173,37 @@ final class EnvchainTests: XCTestCase {
 
     func testJSONUndefinedNamespace() {
         let result = run(["--json", "nonexistent-ns-\(testNamespace)"])
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("WARNING"))
+    }
+
+    func testAWSCredential() {
+        _ = run(["--set", testNamespace, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"], input: "AKID123\nsecret456\ntoken789\n")
+        let result = run(["--aws-credential", testNamespace])
+        XCTAssertEqual(result.exitCode, 0)
+        let data = result.stdout.data(using: .utf8)!
+        let cred = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(cred["Version"] as? Int, 1)
+        XCTAssertEqual(cred["AccessKeyId"] as? String, "AKID123")
+        XCTAssertEqual(cred["SecretAccessKey"] as? String, "secret456")
+        XCTAssertEqual(cred["SessionToken"] as? String, "token789")
+    }
+
+    func testAWSCredentialWithoutOptionalFields() {
+        _ = run(["--set", testNamespace, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"], input: "AKID123\nsecret456\n")
+        let result = run(["--aws-credential", testNamespace])
+        XCTAssertEqual(result.exitCode, 0)
+        let data = result.stdout.data(using: .utf8)!
+        let cred = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(cred["Version"] as? Int, 1)
+        XCTAssertEqual(cred["AccessKeyId"] as? String, "AKID123")
+        XCTAssertEqual(cred["SecretAccessKey"] as? String, "secret456")
+        XCTAssertNil(cred["SessionToken"])
+        XCTAssertNil(cred["Expiration"])
+    }
+
+    func testAWSCredentialUndefinedNamespace() {
+        let result = run(["--aws-credential", "nonexistent-ns-\(testNamespace)"])
         XCTAssertEqual(result.exitCode, 1)
         XCTAssertTrue(result.stderr.contains("WARNING"))
     }

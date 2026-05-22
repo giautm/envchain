@@ -195,6 +195,8 @@ func abortWithHelp() -> Never {
             \(name) NAMESPACE CMD [ARG ...]
           Print as JSON
             \(name) --json NAMESPACE
+          AWS credential_process
+            \(name) --aws-credential NAMESPACE
           List namespaces
             \(name) --list
           Remove variables
@@ -319,6 +321,33 @@ func cmdJSON(args: ArraySlice<String>) -> Int32 {
     return 0
 }
 
+func cmdAWSCredential(args: ArraySlice<String>) -> Int32 {
+    let argv = Array(args)
+    if argv.isEmpty { abortWithHelp() }
+    let name = argv[0]
+    var dict: [String: String] = [:]
+    let found = Keychain.searchValues(namespace: name) { key, value in
+        dict[key] = value
+    }
+    if !found {
+        fputs("WARNING: namespace `\(name)` not defined.\n", stderr)
+        fputs("         You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n\n", stderr)
+        return 1
+    }
+    var credential: [String: Any] = ["Version": 1]
+    if let v = dict["AWS_ACCESS_KEY_ID"] { credential["AccessKeyId"] = v }
+    if let v = dict["AWS_SECRET_ACCESS_KEY"] { credential["SecretAccessKey"] = v }
+    if let v = dict["AWS_SESSION_TOKEN"] { credential["SessionToken"] = v }
+    if let v = dict["AWS_CREDENTIAL_EXPIRATION"] { credential["Expiration"] = v }
+    guard let data = try? JSONSerialization.data(withJSONObject: credential, options: [.sortedKeys]),
+          let json = String(data: data, encoding: .utf8) else {
+        fputs("Failed to serialize JSON\n", stderr)
+        return 1
+    }
+    print(json)
+    return 0
+}
+
 func cmdExec(args: ArraySlice<String>) -> Int32 {
     var argv = Array(args)
     if argv.count < 2 { abortWithHelp() }
@@ -356,6 +385,9 @@ func main() -> Int32 {
     } else if args[0] == "--json" {
         args.removeFirst()
         return cmdJSON(args: args[...])
+    } else if args[0] == "--aws-credential" {
+        args.removeFirst()
+        return cmdAWSCredential(args: args[...])
     } else if args[0] == "--unset" {
         args.removeFirst()
         return cmdUnset(args: args[...])
