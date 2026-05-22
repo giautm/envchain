@@ -21,6 +21,7 @@ final class EnvchainTests: XCTestCase {
         _ = run(["--unset", testNamespace, "TEST_KEY"])
         _ = run(["--unset", testNamespace, "KEY_A"])
         _ = run(["--unset", testNamespace, "KEY_B"])
+        _ = run(["--unset", testNamespace, "mixedCase_Key"])
     }
 
     // MARK: - Helpers
@@ -148,5 +149,28 @@ final class EnvchainTests: XCTestCase {
     func testExecRequiresCommand() {
         let result = run([testNamespace])
         XCTAssertEqual(result.exitCode, 2)
+    }
+
+    func testJSONOutput() {
+        _ = run(["--set", testNamespace, "KEY_A", "KEY_B"], input: "val_a\nval_b\n")
+        let result = run(["--json", testNamespace])
+        XCTAssertEqual(result.exitCode, 0)
+        let data = result.stdout.data(using: .utf8)!
+        let dict = try! JSONSerialization.jsonObject(with: data) as! [String: String]
+        XCTAssertEqual(dict["KEY_A"], "val_a")
+        XCTAssertEqual(dict["KEY_B"], "val_b")
+    }
+
+    func testJSONPreservesKeyCase() {
+        _ = run(["--set", testNamespace, "mixedCase_Key"], input: "hello\n")
+        let result = run(["--json", testNamespace])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "{\"mixedCase_Key\":\"hello\"}")
+    }
+
+    func testJSONUndefinedNamespace() {
+        let result = run(["--json", "nonexistent-ns-\(testNamespace)"])
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.contains("WARNING"))
     }
 }

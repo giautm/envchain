@@ -193,6 +193,8 @@ func abortWithHelp() -> Never {
             \(name) (--set|-s) [--[no-]require-passphrase|-p|-P] [--noecho|-n] NAMESPACE ENV [ENV ..]
           Execute with variables
             \(name) NAMESPACE CMD [ARG ...]
+          Print as JSON
+            \(name) --json NAMESPACE
           List namespaces
             \(name) --list
           Remove variables
@@ -295,6 +297,28 @@ func cmdUnset(args: ArraySlice<String>) -> Int32 {
     return 0
 }
 
+func cmdJSON(args: ArraySlice<String>) -> Int32 {
+    let argv = Array(args)
+    if argv.isEmpty { abortWithHelp() }
+    let name = argv[0]
+    var dict: [String: String] = [:]
+    let found = Keychain.searchValues(namespace: name) { key, value in
+        dict[key] = value
+    }
+    if !found {
+        fputs("WARNING: namespace `\(name)` not defined.\n", stderr)
+        fputs("         You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n\n", stderr)
+        return 1
+    }
+    guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
+          let json = String(data: data, encoding: .utf8) else {
+        fputs("Failed to serialize JSON\n", stderr)
+        return 1
+    }
+    print(json)
+    return 0
+}
+
 func cmdExec(args: ArraySlice<String>) -> Int32 {
     var argv = Array(args)
     if argv.count < 2 { abortWithHelp() }
@@ -329,6 +353,9 @@ func main() -> Int32 {
     } else if args[0] == "--list" || args[0] == "-l" {
         args.removeFirst()
         return cmdList(args: args[...])
+    } else if args[0] == "--json" {
+        args.removeFirst()
+        return cmdJSON(args: args[...])
     } else if args[0] == "--unset" {
         args.removeFirst()
         return cmdUnset(args: args[...])
