@@ -1,0 +1,13 @@
+{
+  "id": "apt-packages",
+  "version": "1.0.0",
+  "name": "APT Packages",
+  "description": "Install packages using apt-get",
+  "options": {
+    "packages": {
+      "type": "string",
+      "description": "Space-separated list of packages to install",
+      "default": ""
+    }
+  }
+}

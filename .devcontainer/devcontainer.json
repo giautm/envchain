@@ -1,0 +1,17 @@
+{
+  "name": "envchain",
+  "image": "swift:6.0",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {},
+    "./features/apt-packages": {
+      "packages": "libsecret-1-dev dbus-x11 gnome-keyring make"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "sswg.swift-lang"
+      ]
+    }
+  }
+}
