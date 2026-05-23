@@ -7,6 +7,12 @@ TARBALL=$(DIST_DIR)/$(BINARY_NAME)-$(ARCH)-apple-darwin.tar.gz
 all:
 	swift build -c release
 
+build:
+	swift build
+
+test:
+	eval "$$(dbus-launch --sh-syntax)" && echo "" | gnome-keyring-daemon --unlock --components=secrets && swift test
+
 package: all
 	mkdir -p $(DIST_DIR)
 	cp .build/release/$(BINARY_NAME) $(DIST_DIR)/$(BINARY_NAME)
