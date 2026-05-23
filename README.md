@@ -1,14 +1,24 @@
 # envchain
 
-Set environment variables from macOS Keychain. A Swift reimplementation of [sorah/envchain](https://github.com/sorah/envchain).
+Set environment variables from macOS Keychain or Linux Secret Service. A Swift reimplementation of [sorah/envchain](https://github.com/sorah/envchain).
 
 ## Installation
 
 ### From Source
 
+Requires Swift 6.0+.
+
 ```
 make
 sudo make install
+```
+
+### Linux Dependencies
+
+On Linux, envchain uses libsecret (GNOME Keyring / Secret Service):
+
+```
+sudo apt install libsecret-1-dev
 ```
 
 ## Usage
@@ -113,7 +123,20 @@ Supported keychain keys: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESS
 
 ## How it works
 
-Secrets are stored in the macOS Keychain as generic passwords with service name `envchain-NAMESPACE`. When executing a command, envchain sets the stored key-value pairs as environment variables then replaces itself with the target process via `execvp`.
+Secrets are stored in the macOS Keychain (or Linux Secret Service via libsecret) as generic passwords with service name `envchain-NAMESPACE`. When executing a command, envchain sets the stored key-value pairs as environment variables then replaces itself with the target process via `execvp`.
+
+## Development
+
+```
+# Build (debug)
+make build
+
+# Build (release)
+make
+
+# Run tests (Linux — requires dbus and gnome-keyring)
+make test
+```
 
 ## License
 
