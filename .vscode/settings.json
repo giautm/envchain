@@ -1,0 +1,6 @@
+{
+  "[swift]": {
+    "editor.defaultFormatter": "sswg.swift-lang",
+    "editor.formatOnSave": true
+  }
+}

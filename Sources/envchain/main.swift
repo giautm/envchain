@@ -1,5 +1,12 @@
 @preconcurrency import Foundation
 
+struct StderrOutputStream: TextOutputStream {
+  mutating func write(_ string: String) {
+    FileHandle.standardError.write(Data(string.utf8))
+  }
+}
+nonisolated(unsafe) var stdError = StderrOutputStream()
+
 // Disable core dumps to prevent secrets from being written to disk
 var rl = rlimit(rlim_cur: 0, rlim_max: 0)
 #if os(Linux)
@@ -8,9 +15,10 @@ setrlimit(Int32(RLIMIT_CORE.rawValue), &rl)
 setrlimit(RLIMIT_CORE, &rl)
 #endif
 
-func abortWithHelp() -> Never {
+func printHelp() {
   let name = CommandLine.arguments[0]
-  fputs("""
+  print(
+    """
     \(name) version \(version)
 
     Usage:
@@ -38,13 +46,15 @@ func abortWithHelp() -> Never {
       Replace the item's ACL list to require passphrase (or not).
       Leave as is when both options are omitted.
 
-    """, stderr)
-  exit(2)
+    """, to: &stdError)
 }
 
 func main() -> Int32 {
   var args = Array(CommandLine.arguments.dropFirst())
-  if args.isEmpty { abortWithHelp() }
+  if args.isEmpty {
+    printHelp()
+    return 2
+  }
   if args[0] == "--set" || args[0] == "-s" {
     args.removeFirst()
     return cmdSet(args: args[...])
@@ -61,7 +71,7 @@ func main() -> Int32 {
     args.removeFirst()
     return cmdUnset(args: args[...])
   } else if args[0].hasPrefix("-") {
-    fputs("Unknown option \(args[0])\n", stderr)
+    print("Unknown option \(args[0])", to: &stdError)
     return 2
   } else {
     return cmdExec(args: args[...])

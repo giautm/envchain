@@ -9,7 +9,9 @@ struct Keychain {
     "\(servicePrefix)\(namespace)"
   }
 
-  static func saveValue(namespace: String, key: String, value: String, requirePassphrase: Int) {
+  static func saveValue(
+    namespace: String, key: String, value: String, requirePassphrase: Int
+  ) {
     let service = serviceName(for: namespace)
     let valueData = value.data(using: .utf8)!
     let searchQuery: [String: Any] = [
@@ -41,7 +43,8 @@ struct Keychain {
         newItem[kSecAttrAccessControl as String] = accessControl
       }
     } else {
-      newItem[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+      newItem[kSecAttrAccessible as String] =
+        kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     }
     status = SecItemAdd(newItem as CFDictionary, nil)
     if status != errSecSuccess {
@@ -49,7 +52,9 @@ struct Keychain {
     }
   }
 
-  static func searchValues(namespace: String, callback: (String, String) -> Void) -> Bool {
+  static func searchValues(
+    namespace: String, callback: (String, String) -> Void
+  ) -> Bool {
     let service = serviceName(for: namespace)
     let listQuery: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
@@ -80,10 +85,12 @@ struct Keychain {
         kSecMatchLimit as String: kSecMatchLimitOne,
       ]
       var valueResult: AnyObject?
-      let valueStatus = SecItemCopyMatching(valueQuery as CFDictionary, &valueResult)
+      let valueStatus = SecItemCopyMatching(
+        valueQuery as CFDictionary, &valueResult)
       guard valueStatus == errSecSuccess,
-          let data = valueResult as? Data,
-          let value = String(data: data, encoding: .utf8) else {
+        let data = valueResult as? Data,
+        let value = String(data: data, encoding: .utf8)
+      else {
         continue
       }
       callback(account, value)
@@ -112,7 +119,8 @@ struct Keychain {
     var names = Set<String>()
     for item in items {
       if let service = item[kSecAttrService as String] as? String,
-         service.hasPrefix(servicePrefix) {
+        service.hasPrefix(servicePrefix)
+      {
         let name = String(service.dropFirst(servicePrefix.count))
         names.insert(name)
       }
@@ -132,9 +140,9 @@ struct Keychain {
 
   private static func failWithOSStatus(_ status: OSStatus) {
     if let msg = SecCopyErrorMessageString(status, nil) {
-      fputs("Error: \(msg)\n", stderr)
+      print("Error: \(msg)", to: &stdError)
     } else {
-      fputs("Error: \(status)\n", stderr)
+      print("Error: \(status)", to: &stdError)
     }
     exit(10)
   }
