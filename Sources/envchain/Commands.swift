@@ -1,10 +1,38 @@
 @preconcurrency import Foundation
 
+private let deniedEnvKeys: Set<String> = [
+  "LD_PRELOAD", "LD_LIBRARY_PATH",
+  "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH",
+]
+
+extension Unicode.Scalar {
+  fileprivate var isASCIILetter: Bool {
+    ("A"..."Z") ~= self || ("a"..."z") ~= self
+  }
+  fileprivate var isASCIIDigit: Bool {
+    ("0"..."9") ~= self
+  }
+}
+
 private func isValidEnvKey(_ key: String) -> Bool {
-  guard !key.isEmpty, !key.contains("="), !key.contains("\0") else {
+  guard !key.isEmpty else {
     return false
   }
-  return true
+  let scalars = key.unicodeScalars
+  guard let first = scalars.first else {
+    return false
+  }
+  // First character must be ASCII letter or underscore
+  guard first.isASCIILetter || first == "_" else {
+    return false
+  }
+  // Remaining characters must be ASCII letters, digits, or underscore
+  for ch in scalars.dropFirst() {
+    guard ch.isASCIILetter || ch.isASCIIDigit || ch == "_" else {
+      return false
+    }
+  }
+  return !deniedEnvKeys.contains(key)
 }
 
 private func isValidNamespace(_ name: String) -> Bool {
