@@ -1,8 +1,9 @@
-import XCTest
 import Foundation
+import XCTest
 
 final class EnvchainTests: XCTestCase {
-  private let testNamespace = "envchain-test-\(ProcessInfo.processInfo.processIdentifier)"
+  private let testNamespace =
+    "envchain-test-\(ProcessInfo.processInfo.processIdentifier)"
 
   private var binaryPath: String {
     // Find the built binary
@@ -30,7 +31,9 @@ final class EnvchainTests: XCTestCase {
   // MARK: - Helpers
 
   @discardableResult
-  private func run(_ args: [String], input: String? = nil) -> (exitCode: Int32, stdout: String, stderr: String) {
+  private func run(_ args: [String], input: String? = nil) -> (
+    exitCode: Int32, stdout: String, stderr: String
+  ) {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: binaryPath)
     process.arguments = args
@@ -70,7 +73,8 @@ final class EnvchainTests: XCTestCase {
   }
 
   func testSetAndListKeys() {
-    let setResult = run(["--set", testNamespace, "TEST_KEY"], input: "secret_value\n")
+    let setResult = run(
+      ["--set", testNamespace, "TEST_KEY"], input: "secret_value\n")
     XCTAssertEqual(setResult.exitCode, 0)
     let listResult = run(["--list", testNamespace])
     XCTAssertEqual(listResult.exitCode, 0)
@@ -78,7 +82,8 @@ final class EnvchainTests: XCTestCase {
   }
 
   func testSetAndGetValue() {
-    let setResult = run(["--set", testNamespace, "TEST_KEY"], input: "my_secret\n")
+    let setResult = run(
+      ["--set", testNamespace, "TEST_KEY"], input: "my_secret\n")
     XCTAssertEqual(setResult.exitCode, 0)
     let listResult = run(["--list", "-v", testNamespace])
     XCTAssertEqual(listResult.exitCode, 0)
@@ -86,7 +91,8 @@ final class EnvchainTests: XCTestCase {
   }
 
   func testSetMultipleKeys() {
-    let setResult = run(["--set", testNamespace, "KEY_A", "KEY_B"], input: "val_a\nval_b\n")
+    let setResult = run(
+      ["--set", testNamespace, "KEY_A", "KEY_B"], input: "val_a\nval_b\n")
     XCTAssertEqual(setResult.exitCode, 0)
     let listResult = run(["--list", "-v", testNamespace])
     XCTAssertEqual(listResult.exitCode, 0)
@@ -107,14 +113,18 @@ final class EnvchainTests: XCTestCase {
     _ = run(["--set", testNamespace, "TEST_KEY"], input: "exec_value\n")
     let execResult = run([testNamespace, "printenv", "TEST_KEY"])
     XCTAssertEqual(execResult.exitCode, 0)
-    XCTAssertEqual(execResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "exec_value")
+    XCTAssertEqual(
+      execResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines),
+      "exec_value")
   }
 
   func testExecCommaNamespaces() {
     _ = run(["--set", testNamespace, "KEY_A"], input: "alpha\n")
     let execResult = run([testNamespace, "printenv", "KEY_A"])
     XCTAssertEqual(execResult.exitCode, 0)
-    XCTAssertEqual(execResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "alpha")
+    XCTAssertEqual(
+      execResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "alpha"
+    )
   }
 
   func testExecUndefinedNamespaceWarns() {
@@ -155,11 +165,13 @@ final class EnvchainTests: XCTestCase {
   }
 
   func testJSONOutput() {
-    _ = run(["--set", testNamespace, "KEY_A", "KEY_B"], input: "val_a\nval_b\n")
+    _ = run(
+      ["--set", testNamespace, "KEY_A", "KEY_B"], input: "val_a\nval_b\n")
     let result = run(["--json", testNamespace])
     XCTAssertEqual(result.exitCode, 0)
     let data = result.stdout.data(using: .utf8)!
-    let dict = try! JSONSerialization.jsonObject(with: data) as! [String: String]
+    let dict =
+      try! JSONSerialization.jsonObject(with: data) as! [String: String]
     XCTAssertEqual(dict["KEY_A"], "val_a")
     XCTAssertEqual(dict["KEY_B"], "val_b")
   }
@@ -168,7 +180,9 @@ final class EnvchainTests: XCTestCase {
     _ = run(["--set", testNamespace, "mixedCase_Key"], input: "hello\n")
     let result = run(["--json", testNamespace])
     XCTAssertEqual(result.exitCode, 0)
-    XCTAssertEqual(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "{\"mixedCase_Key\":\"hello\"}")
+    XCTAssertEqual(
+      result.stdout.trimmingCharacters(in: .whitespacesAndNewlines),
+      "{\"mixedCase_Key\":\"hello\"}")
   }
 
   func testJSONUndefinedNamespace() {
@@ -178,7 +192,12 @@ final class EnvchainTests: XCTestCase {
   }
 
   func testAWSCredential() {
-    _ = run(["--set", testNamespace, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"], input: "AKID123\nsecret456\ntoken789\n")
+    _ = run(
+      [
+        "--set", testNamespace, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+      ],
+      input: "AKID123\nsecret456\ntoken789\n")
     let result = run(["--aws-credential", testNamespace])
     XCTAssertEqual(result.exitCode, 0)
     let data = result.stdout.data(using: .utf8)!
@@ -190,7 +209,9 @@ final class EnvchainTests: XCTestCase {
   }
 
   func testAWSCredentialWithoutOptionalFields() {
-    _ = run(["--set", testNamespace, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"], input: "AKID123\nsecret456\n")
+    _ = run(
+      ["--set", testNamespace, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+      input: "AKID123\nsecret456\n")
     let result = run(["--aws-credential", testNamespace])
     XCTAssertEqual(result.exitCode, 0)
     let data = result.stdout.data(using: .utf8)!

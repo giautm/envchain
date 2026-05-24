@@ -20,7 +20,9 @@ func cmdSet(args: ArraySlice<String>) -> Int32 {
   var requirePassphrase = -1
 
   while argv.count > 2 {
-    guard argv[0].hasPrefix("-") else { break }
+    guard argv[0].hasPrefix("-") else {
+      break
+    }
     if argv[0] == "-n" || argv[0] == "--noecho" {
       argv.removeFirst()
       noecho = true
@@ -31,26 +33,31 @@ func cmdSet(args: ArraySlice<String>) -> Int32 {
       argv.removeFirst()
       requirePassphrase = 0
     } else {
-      fputs("Unknown option: \(argv[0])\n", stderr)
+      print("Unknown option: \(argv[0])", to: &stdError)
       return 1
     }
   }
-  if argv.count < 2 { abortWithHelp() }
+  if argv.count < 2 {
+    printHelp()
+    return 2
+  }
   let name = argv[0]
   guard isValidNamespace(name) else {
-    fputs("Invalid namespace name: \(name)\n", stderr)
+    print("Invalid namespace name: \(name)", to: &stdError)
     return 1
   }
   argv.removeFirst()
   for key in argv {
     guard isValidEnvKey(key) else {
-      fputs("Invalid environment variable name: \(key)\n", stderr)
+      print("Invalid environment variable name: \(key)", to: &stdError)
       return 1
     }
     guard let value = askValue(name: name, key: key, noecho: noecho) else {
       return 1
     }
-    Keychain.saveValue(namespace: name, key: key, value: value, requirePassphrase: requirePassphrase)
+    Keychain.saveValue(
+      namespace: name, key: key, value: value,
+      requirePassphrase: requirePassphrase)
   }
   return 0
 }
@@ -64,14 +71,17 @@ func cmdList(args: ArraySlice<String>) -> Int32 {
       argv.removeFirst()
       showValue = true
     } else {
-      if target != nil { abortWithHelp() }
+      if target != nil {
+        printHelp()
+        return 2
+      }
       target = argv[0]
       argv.removeFirst()
     }
   }
   if let target = target {
     guard isValidNamespace(target) else {
-      fputs("Invalid namespace name: \(target)\n", stderr)
+      print("Invalid namespace name: \(target)", to: &stdError)
       return 1
     }
     let found = Keychain.searchValues(namespace: target) { key, value in
@@ -82,11 +92,16 @@ func cmdList(args: ArraySlice<String>) -> Int32 {
       }
     }
     if !found {
-      fputs("WARNING: namespace `\(target)` not defined.\n", stderr)
-      fputs("     You can set via running `\(CommandLine.arguments[0]) --set \(target) SOME_ENV_NAME`.\n\n", stderr)
+      print("WARNING: namespace `\(target)` not defined.", to: &stdError)
+      print(
+        "     You can set via running `\(CommandLine.arguments[0]) --set \(target) SOME_ENV_NAME`.\n",
+        to: &stdError)
     }
   } else {
-    if showValue { abortWithHelp() }
+    if showValue {
+      printHelp()
+      return 2
+    }
     let namespaces = Keychain.searchNamespaces()
     for ns in namespaces {
       print(ns)
@@ -97,10 +112,13 @@ func cmdList(args: ArraySlice<String>) -> Int32 {
 
 func cmdUnset(args: ArraySlice<String>) -> Int32 {
   var argv = Array(args)
-  if argv.count < 2 { abortWithHelp() }
+  if argv.count < 2 {
+    printHelp()
+    return 2
+  }
   let name = argv[0]
   guard isValidNamespace(name) else {
-    fputs("Invalid namespace name: \(name)\n", stderr)
+    print("Invalid namespace name: \(name)", to: &stdError)
     return 1
   }
   argv.removeFirst()
@@ -112,10 +130,13 @@ func cmdUnset(args: ArraySlice<String>) -> Int32 {
 
 func cmdJSON(args: ArraySlice<String>) -> Int32 {
   let argv = Array(args)
-  if argv.isEmpty { abortWithHelp() }
+  if argv.isEmpty {
+    printHelp()
+    return 2
+  }
   let name = argv[0]
   guard isValidNamespace(name) else {
-    fputs("Invalid namespace name: \(name)\n", stderr)
+    print("Invalid namespace name: \(name)", to: &stdError)
     return 1
   }
   var dict: [String: String] = [:]
@@ -123,13 +144,18 @@ func cmdJSON(args: ArraySlice<String>) -> Int32 {
     dict[key] = value
   }
   if !found {
-    fputs("WARNING: namespace `\(name)` not defined.\n", stderr)
-    fputs("     You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n\n", stderr)
+    print("WARNING: namespace `\(name)` not defined.", to: &stdError)
+    print(
+      "     You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n",
+      to: &stdError)
     return 1
   }
-  guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
-      let json = String(data: data, encoding: .utf8) else {
-    fputs("Failed to serialize JSON\n", stderr)
+  guard
+    let data = try? JSONSerialization.data(
+      withJSONObject: dict, options: [.sortedKeys]),
+    let json = String(data: data, encoding: .utf8)
+  else {
+    print("Failed to serialize JSON", to: &stdError)
     return 1
   }
   print(json)
@@ -138,10 +164,13 @@ func cmdJSON(args: ArraySlice<String>) -> Int32 {
 
 func cmdAWSCredential(args: ArraySlice<String>) -> Int32 {
   let argv = Array(args)
-  if argv.isEmpty { abortWithHelp() }
+  if argv.isEmpty {
+    printHelp()
+    return 2
+  }
   let name = argv[0]
   guard isValidNamespace(name) else {
-    fputs("Invalid namespace name: \(name)\n", stderr)
+    print("Invalid namespace name: \(name)", to: &stdError)
     return 1
   }
   var dict: [String: String] = [:]
@@ -149,18 +178,31 @@ func cmdAWSCredential(args: ArraySlice<String>) -> Int32 {
     dict[key] = value
   }
   if !found {
-    fputs("WARNING: namespace `\(name)` not defined.\n", stderr)
-    fputs("     You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n\n", stderr)
+    print("WARNING: namespace `\(name)` not defined.", to: &stdError)
+    print(
+      "     You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n",
+      to: &stdError)
     return 1
   }
   var credential: [String: Any] = ["Version": 1]
-  if let v = dict["AWS_ACCESS_KEY_ID"] { credential["AccessKeyId"] = v }
-  if let v = dict["AWS_SECRET_ACCESS_KEY"] { credential["SecretAccessKey"] = v }
-  if let v = dict["AWS_SESSION_TOKEN"] { credential["SessionToken"] = v }
-  if let v = dict["AWS_CREDENTIAL_EXPIRATION"] { credential["Expiration"] = v }
-  guard let data = try? JSONSerialization.data(withJSONObject: credential, options: [.sortedKeys]),
-      let json = String(data: data, encoding: .utf8) else {
-    fputs("Failed to serialize JSON\n", stderr)
+  if let v = dict["AWS_ACCESS_KEY_ID"] {
+    credential["AccessKeyId"] = v
+  }
+  if let v = dict["AWS_SECRET_ACCESS_KEY"] {
+    credential["SecretAccessKey"] = v
+  }
+  if let v = dict["AWS_SESSION_TOKEN"] {
+    credential["SessionToken"] = v
+  }
+  if let v = dict["AWS_CREDENTIAL_EXPIRATION"] {
+    credential["Expiration"] = v
+  }
+  guard
+    let data = try? JSONSerialization.data(
+      withJSONObject: credential, options: [.sortedKeys]),
+    let json = String(data: data, encoding: .utf8)
+  else {
+    print("Failed to serialize JSON", to: &stdError)
     return 1
   }
   print(json)
@@ -169,33 +211,42 @@ func cmdAWSCredential(args: ArraySlice<String>) -> Int32 {
 
 func cmdExec(args: ArraySlice<String>) -> Int32 {
   var argv = Array(args)
-  if argv.count < 2 { abortWithHelp() }
+  if argv.count < 2 {
+    printHelp()
+    return 2
+  }
   let namespaceArg = argv[0]
   argv.removeFirst()
   let namespaces = namespaceArg.split(separator: ",").map(String.init)
   for name in namespaces {
     guard isValidNamespace(name) else {
-      fputs("Invalid namespace name: \(name)\n", stderr)
+      print("Invalid namespace name: \(name)", to: &stdError)
       return 1
     }
     let found = Keychain.searchValues(namespace: name) { key, value in
       guard isValidEnvKey(key) else {
-        fputs("WARNING: skipping invalid key \"\(key)\" in namespace `\(name)`\n", stderr)
+        print(
+          "WARNING: skipping invalid key \"\(key)\" in namespace `\(name)`",
+          to: &stdError)
         return
       }
       setenv(key, value, 1)
     }
     if !found {
-      fputs("WARNING: namespace `\(name)` not defined.\n", stderr)
-      fputs("     You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n\n", stderr)
+      print("WARNING: namespace `\(name)` not defined.", to: &stdError)
+      print(
+        "     You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n",
+        to: &stdError)
     }
   }
   let exe = argv[0]
   var cArgs: [UnsafeMutablePointer<CChar>?] = []
   for arg in argv {
     guard let dup = strdup(arg) else {
-      for ptr in cArgs { free(ptr) }
-      fputs("Out of memory\n", stderr)
+      for ptr in cArgs {
+        free(ptr)
+      }
+      print("Out of memory", to: &stdError)
       return 1
     }
     cArgs.append(dup)
@@ -203,8 +254,10 @@ func cmdExec(args: ArraySlice<String>) -> Int32 {
   cArgs.append(nil)
   execvp(exe, &cArgs)
   let err = String(cString: strerror(errno))
-  for ptr in cArgs { free(ptr) }
-  fputs("execvp failed: \(err)\n", stderr)
+  for ptr in cArgs {
+    free(ptr)
+  }
+  print("execvp failed: \(err)", to: &stdError)
   return 1
 }
 
@@ -217,7 +270,7 @@ private func restoreTerminal(_: Int32) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &attrs)
   }
   let nl: [UInt8] = [0x0A]
-  nl.withUnsafeBufferPointer { _ = write(STDOUT_FILENO, $0.baseAddress!, 1) }
+  nl.withUnsafeBufferPointer { _ = write(STDERR_FILENO, $0.baseAddress!, 1) }
   _exit(130)
 }
 
@@ -225,29 +278,30 @@ func noechoRead(prompt: String) -> String? {
   var oldAttrs = termios()
   guard tcgetattr(STDIN_FILENO, &oldAttrs) == 0 else {
     if errno == ENOTTY {
-      fputs("--noecho (-n) requires stdin to be a terminal\n", stderr)
+      print("--noecho (-n) requires stdin to be a terminal", to: &stdError)
     } else {
-      fputs("oops when attempted to read: \(String(cString: strerror(errno)))\n", stderr)
+      print(
+        "oops when attempted to read: \(String(cString: strerror(errno)))",
+        to: &stdError)
     }
     return nil
   }
   var newAttrs = oldAttrs
   newAttrs.c_lflag &= ~tcflag_t(ECHO)
   guard tcsetattr(STDIN_FILENO, TCSAFLUSH, &newAttrs) == 0 else {
-    fputs("tcsetattr failed\n", stderr)
+    print("tcsetattr failed", to: &stdError)
     exit(10)
   }
   savedTermios = oldAttrs
   signal(SIGINT, restoreTerminal)
   signal(SIGTERM, restoreTerminal)
-  fputs("\(prompt) (noecho):", stdout)
-  fflush(stdout)
+  print("\(prompt) (noecho):", terminator: "", to: &stdError)
   let input = readLine()
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &oldAttrs)
   savedTermios = nil
   signal(SIGINT, SIG_DFL)
   signal(SIGTERM, SIG_DFL)
-  fputs("\n", stdout)
+  print("", to: &stdError)
   return input
 }
 
@@ -256,8 +310,7 @@ func askValue(name: String, key: String, noecho: Bool) -> String? {
   if noecho {
     return noechoRead(prompt: prompt)
   } else {
-    fputs("\(prompt): ", stdout)
-    fflush(stdout)
+    print("\(prompt): ", terminator: "", to: &stdError)
     return readLine()
   }
 }
