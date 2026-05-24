@@ -2,8 +2,18 @@ BINARY_NAME=envchain
 PREFIX=/usr/local
 BIN_PATH=$(PREFIX)/bin/$(BINARY_NAME)
 ARCH=$(shell uname -m)
+OS=$(shell uname -s)
 DIST_DIR=dist
-TARBALL=$(DIST_DIR)/$(BINARY_NAME)-$(ARCH)-apple-darwin.tar.gz
+
+ifeq ($(OS),Linux)
+	TRIPLE=$(ARCH)-linux-gnu
+	SHA_CMD=sha256sum
+else
+	TRIPLE=$(ARCH)-apple-darwin
+	SHA_CMD=shasum -a 256
+endif
+
+TARBALL=$(DIST_DIR)/$(BINARY_NAME)-$(TRIPLE).tar.gz
 all:
 	swift build -c release
 
@@ -16,8 +26,8 @@ test:
 package: all
 	mkdir -p $(DIST_DIR)
 	cp .build/release/$(BINARY_NAME) $(DIST_DIR)/$(BINARY_NAME)
-	cd $(DIST_DIR) && tar czf $(BINARY_NAME)-$(ARCH)-apple-darwin.tar.gz $(BINARY_NAME)
-	cd $(DIST_DIR) && shasum -a 256 $(BINARY_NAME)-$(ARCH)-apple-darwin.tar.gz > $(BINARY_NAME)-$(ARCH)-apple-darwin.tar.gz.sha256
+	cd $(DIST_DIR) && tar czf $(BINARY_NAME)-$(TRIPLE).tar.gz $(BINARY_NAME)
+	cd $(DIST_DIR) && $(SHA_CMD) $(BINARY_NAME)-$(TRIPLE).tar.gz > $(BINARY_NAME)-$(TRIPLE).tar.gz.sha256
 	rm $(DIST_DIR)/$(BINARY_NAME)
 
 install: all
