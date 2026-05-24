@@ -228,4 +228,49 @@ final class EnvchainTests: XCTestCase {
     XCTAssertEqual(result.exitCode, 1)
     XCTAssertTrue(result.stderr.contains("WARNING"))
   }
+
+  // MARK: - Env key validation tests
+
+  func testValidEnvKeyAcceptsUppercase() {
+    let result = run(["--set", testNamespace, "FOO"], input: "val\n")
+    XCTAssertEqual(result.exitCode, 0)
+    _ = run(["--unset", testNamespace, "FOO"])
+  }
+
+  func testValidEnvKeyAcceptsUnderscorePrefix() {
+    let result = run(["--set", testNamespace, "_BAR2"], input: "val\n")
+    XCTAssertEqual(result.exitCode, 0)
+    _ = run(["--unset", testNamespace, "_BAR2"])
+  }
+
+  func testInvalidEnvKeyRejectsDigitStart() {
+    let result = run(["--set", testNamespace, "1BADKEY"], input: "val\n")
+    XCTAssertEqual(result.exitCode, 1)
+    XCTAssertTrue(result.stderr.contains("Invalid environment variable name"))
+  }
+
+  func testInvalidEnvKeyRejectsDash() {
+    let result = run(["--set", testNamespace, "BAD-NAME"], input: "val\n")
+    XCTAssertEqual(result.exitCode, 1)
+    XCTAssertTrue(result.stderr.contains("Invalid environment variable name"))
+  }
+
+  func testInvalidEnvKeyRejectsSpace() {
+    let result = run(["--set", testNamespace, "BAD NAME"], input: "val\n")
+    XCTAssertEqual(result.exitCode, 1)
+    XCTAssertTrue(result.stderr.contains("Invalid environment variable name"))
+  }
+
+  func testDeniedEnvKeyLDPreload() {
+    let result = run(["--set", testNamespace, "LD_PRELOAD"], input: "val\n")
+    XCTAssertEqual(result.exitCode, 1)
+    XCTAssertTrue(result.stderr.contains("Invalid environment variable name"))
+  }
+
+  func testDeniedEnvKeyDYLDInsertLibraries() {
+    let result = run(
+      ["--set", testNamespace, "DYLD_INSERT_LIBRARIES"], input: "val\n")
+    XCTAssertEqual(result.exitCode, 1)
+    XCTAssertTrue(result.stderr.contains("Invalid environment variable name"))
+  }
 }
