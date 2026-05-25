@@ -33,26 +33,26 @@ struct Envchain: ParsableCommand {
     #else
     setrlimit(RLIMIT_CORE, &rl)
     #endif
-    // Rewrite legacy flag-style arguments to subcommands for backward compat
+    // Rewrite flag-style arguments to subcommands (sorah/envchain compatibility)
     let args = Array(CommandLine.arguments.dropFirst())
-    let rewritten = rewriteLegacyArgs(args)
+    let rewritten = rewriteFlagArgs(args)
     Self.main(rewritten)
   }
 
-  /// Maps legacy `--set`, `--list`, `--unset`, `--json`, `--aws-credential`
-  /// flags to their subcommand equivalents so both styles work.
-  private static func rewriteLegacyArgs(_ args: [String]) -> [String]? {
+  /// Maps `--set`, `--list`, `--unset`, `--json`, `--aws-credential`
+  /// flags to their subcommand equivalents for sorah/envchain compatibility.
+  private static func rewriteFlagArgs(_ args: [String]) -> [String]? {
     guard let first = args.first else {
       return args
     }
-    let legacyMap: [String: String] = [
+    let flagMap: [String: String] = [
       "--set": "set",
       "--list": "list",
       "--unset": "unset",
       "--json": "json",
       "--aws-credential": "aws-credential",
     ]
-    if let subcommand = legacyMap[first] {
+    if let subcommand = flagMap[first] {
       return [subcommand] + Array(args.dropFirst())
     }
     return args

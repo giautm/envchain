@@ -2,6 +2,8 @@
 
 Set environment variables from macOS Keychain or Linux Secret Service. A Swift reimplementation of [sorah/envchain](https://github.com/sorah/envchain).
 
+CLI-compatible with the original `sorah/envchain` — works as a drop-in replacement.
+
 ## Installation
 
 ### From Source
@@ -26,13 +28,13 @@ sudo apt install libsecret-1-dev
 ### Save variables
 
 ```
-envchain --set NAMESPACE ENV [ENV ..]
+envchain set NAMESPACE ENV [ENV ..]
 ```
 
 You will be prompted to enter values:
 
 ```
-$ envchain --set aws AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+$ envchain set aws AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 aws.AWS_ACCESS_KEY_ID: my-access-key
 aws.AWS_SECRET_ACCESS_KEY: secret
 ```
@@ -40,10 +42,16 @@ aws.AWS_SECRET_ACCESS_KEY: secret
 ### Execute commands with variables
 
 ```
-$ envchain aws env | grep AWS_
+$ envchain exec aws env | grep AWS_
 AWS_ACCESS_KEY_ID=my-access-key
 AWS_SECRET_ACCESS_KEY=secret
 
+$ envchain exec aws s3cmd ls
+```
+
+Since `exec` is the default subcommand, you can omit it:
+
+```
 $ envchain aws s3cmd ls
 ```
 
@@ -56,7 +64,7 @@ $ envchain aws,hubot env | grep 'AWS_\|HUBOT_'
 ### List namespaces
 
 ```
-$ envchain --list
+$ envchain list
 aws
 hubot
 ```
@@ -64,7 +72,7 @@ hubot
 ### List keys in a namespace
 
 ```
-$ envchain --list myns
+$ envchain list myns
 KEY_A
 KEY_B
 ```
@@ -72,7 +80,7 @@ KEY_B
 ### Show values
 
 ```
-$ envchain --list -v myns
+$ envchain list -v myns
 KEY_A=value_a
 KEY_B=value_b
 ```
@@ -80,13 +88,13 @@ KEY_B=value_b
 ### Remove variables
 
 ```
-$ envchain --unset aws AWS_SECRET_ACCESS_KEY
+$ envchain unset aws AWS_SECRET_ACCESS_KEY
 ```
 
 ### Print as JSON
 
 ```
-$ envchain --json aws
+$ envchain json aws
 {"AWS_ACCESS_KEY_ID":"my-access-key","AWS_SECRET_ACCESS_KEY":"secret"}
 ```
 
@@ -95,7 +103,7 @@ $ envchain --json aws
 Use envchain as an AWS SDK [credential_process](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sourcing-external.html) provider:
 
 ```
-$ envchain --aws-credential aws
+$ envchain aws-credential aws
 {"AccessKeyId":"my-access-key","SecretAccessKey":"secret","Version":1}
 ```
 
@@ -103,23 +111,41 @@ In `~/.aws/config`:
 
 ```ini
 [profile myprofile]
-credential_process = envchain --aws-credential aws
+credential_process = envchain aws-credential aws
 ```
 
 Supported keychain keys: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (optional), `AWS_CREDENTIAL_EXPIRATION` (optional).
 
-### Options
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `set` | Add keychain items for a namespace |
+| `list` | List namespaces or keys |
+| `unset` | Remove keychain items |
+| `json` | Print all values in a namespace as JSON |
+| `aws-credential` | Output AWS credential_process JSON format |
+| `exec` (default) | Execute a command with environment variables |
+
+### Options (for `set`)
 
 | Flag | Description |
 |------|-------------|
-| `--set`, `-s` | Add keychain items for a namespace |
-| `--list`, `-l` | List namespaces or keys |
-| `--json` | Print all values in a namespace as JSON |
-| `--aws-credential` | Output AWS credential_process JSON format |
-| `--unset` | Remove keychain items |
-| `--noecho`, `-n` | Do not echo input when prompting |
-| `--require-passphrase`, `-p` | Require authentication to access the item |
-| `--no-require-passphrase`, `-P` | Do not require authentication |
+| `-n`, `--noecho` | Do not echo input when prompting |
+| `-p`, `--require-passphrase` | Require authentication to access the item |
+| `-P`, `--no-require-passphrase` | Do not require authentication |
+
+### Alternative flag syntax
+
+The original `sorah/envchain` flag-style syntax is also supported:
+
+```
+envchain --set aws KEY        # same as: envchain set aws KEY
+envchain --list               # same as: envchain list
+envchain --unset aws KEY      # same as: envchain unset aws KEY
+envchain --json aws           # same as: envchain json aws
+envchain --aws-credential aws # same as: envchain aws-credential aws
+```
 
 ## How it works
 
