@@ -2,8 +2,10 @@ import Foundation
 import XCTest
 
 final class EnvchainTests: XCTestCase {
-  private let testNamespace =
-    "envchain-test-\(ProcessInfo.processInfo.processIdentifier)"
+  private let testNamespace1 =
+    "envchain-test1-\(ProcessInfo.processInfo.processIdentifier)"
+  private let testNamespace2 =
+    "envchain-test2-\(ProcessInfo.processInfo.processIdentifier)"
 
   private var binaryPath: String {
     // Find the built binary
@@ -19,13 +21,14 @@ final class EnvchainTests: XCTestCase {
   override func tearDown() {
     super.tearDown()
     // Clean up test keychain items
-    _ = run(["--unset", testNamespace, "TEST_KEY"])
-    _ = run(["--unset", testNamespace, "KEY_A"])
-    _ = run(["--unset", testNamespace, "KEY_B"])
-    _ = run(["--unset", testNamespace, "mixedCase_Key"])
-    _ = run(["--unset", testNamespace, "AWS_ACCESS_KEY_ID"])
-    _ = run(["--unset", testNamespace, "AWS_SECRET_ACCESS_KEY"])
-    _ = run(["--unset", testNamespace, "AWS_SESSION_TOKEN"])
+    _ = run(["--unset", testNamespace1, "TEST_KEY"])
+    _ = run(["--unset", testNamespace1, "KEY_A"])
+    _ = run(["--unset", testNamespace1, "KEY_B"])
+    _ = run(["--unset", testNamespace1, "mixedCase_Key"])
+    _ = run(["--unset", testNamespace1, "AWS_ACCESS_KEY_ID"])
+    _ = run(["--unset", testNamespace1, "AWS_SECRET_ACCESS_KEY"])
+    _ = run(["--unset", testNamespace1, "AWS_SESSION_TOKEN"])
+    _ = run(["--unset", testNamespace2, "KEY_B"])
   }
 
   // MARK: - Helpers
@@ -62,56 +65,55 @@ final class EnvchainTests: XCTestCase {
 
   func testNoArgsShowsHelp() {
     let result = run([])
-    XCTAssertEqual(result.exitCode, 2)
-    XCTAssertTrue(result.stderr.contains("Usage:"))
+    XCTAssertNotEqual(result.exitCode, 0)
+    XCTAssertTrue(result.stderr.contains("USAGE:") || result.stderr.contains("Usage:"))
   }
 
   func testUnknownOption() {
     let result = run(["--invalid"])
-    XCTAssertEqual(result.exitCode, 2)
-    XCTAssertTrue(result.stderr.contains("Unknown option"))
+    XCTAssertNotEqual(result.exitCode, 0)
   }
 
   func testSetAndListKeys() {
     let setResult = run(
-      ["--set", testNamespace, "TEST_KEY"], input: "secret_value\n")
+      ["--set", testNamespace1, "TEST_KEY"], input: "secret_value\n")
     XCTAssertEqual(setResult.exitCode, 0)
-    let listResult = run(["--list", testNamespace])
+    let listResult = run(["--list", testNamespace1])
     XCTAssertEqual(listResult.exitCode, 0)
     XCTAssertTrue(listResult.stdout.contains("TEST_KEY"))
   }
 
   func testSetAndGetValue() {
     let setResult = run(
-      ["--set", testNamespace, "TEST_KEY"], input: "my_secret\n")
+      ["--set", testNamespace1, "TEST_KEY"], input: "my_secret\n")
     XCTAssertEqual(setResult.exitCode, 0)
-    let listResult = run(["--list", "-v", testNamespace])
+    let listResult = run(["--list", "-v", testNamespace1])
     XCTAssertEqual(listResult.exitCode, 0)
     XCTAssertTrue(listResult.stdout.contains("TEST_KEY=my_secret"))
   }
 
   func testSetMultipleKeys() {
     let setResult = run(
-      ["--set", testNamespace, "KEY_A", "KEY_B"], input: "val_a\nval_b\n")
+      ["--set", testNamespace1, "KEY_A", "KEY_B"], input: "val_a\nval_b\n")
     XCTAssertEqual(setResult.exitCode, 0)
-    let listResult = run(["--list", "-v", testNamespace])
+    let listResult = run(["--list", "-v", testNamespace1])
     XCTAssertEqual(listResult.exitCode, 0)
     XCTAssertTrue(listResult.stdout.contains("KEY_A=val_a"))
     XCTAssertTrue(listResult.stdout.contains("KEY_B=val_b"))
   }
 
   func testUnset() {
-    _ = run(["--set", testNamespace, "TEST_KEY"], input: "to_delete\n")
-    let unsetResult = run(["--unset", testNamespace, "TEST_KEY"])
+    _ = run(["--set", testNamespace1, "TEST_KEY"], input: "to_delete\n")
+    let unsetResult = run(["--unset", testNamespace1, "TEST_KEY"])
     XCTAssertEqual(unsetResult.exitCode, 0)
-    let listResult = run(["--list", testNamespace])
+    let listResult = run(["--list", testNamespace1])
     XCTAssertEqual(listResult.exitCode, 0)
     XCTAssertFalse(listResult.stdout.contains("TEST_KEY"))
   }
 
   func testExecSetsEnvVars() {
-    _ = run(["--set", testNamespace, "TEST_KEY"], input: "exec_value\n")
-    let execResult = run([testNamespace, "printenv", "TEST_KEY"])
+    _ = run(["--set", testNamespace1, "TEST_KEY"], input: "exec_value\n")
+    let execResult = run([testNamespace1, "printenv", "TEST_KEY"])
     XCTAssertEqual(execResult.exitCode, 0)
     XCTAssertEqual(
       execResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -119,55 +121,58 @@ final class EnvchainTests: XCTestCase {
   }
 
   func testExecCommaNamespaces() {
-    _ = run(["--set", testNamespace, "KEY_A"], input: "alpha\n")
-    let execResult = run([testNamespace, "printenv", "KEY_A"])
+    _ = run(["--set", testNamespace1, "KEY_A"], input: "alpha\n")
+    _ = run(["--set", testNamespace2, "KEY_B"], input: "beta\n")
+    let execResult = run([
+      "\(testNamespace1),\(testNamespace2)",
+      "sh", "-c", "echo $KEY_A:$KEY_B",
+    ])
     XCTAssertEqual(execResult.exitCode, 0)
-    XCTAssertEqual(
-      execResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "alpha"
-    )
+    let output = execResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    XCTAssertEqual(output, "alpha:beta")
   }
 
   func testExecUndefinedNamespaceWarns() {
-    let result = run(["nonexistent-ns-\(testNamespace)", "printenv"])
+    let result = run(["nonexistent-ns-\(testNamespace1)", "printenv"])
     // Should still succeed (exec printenv) but warn on stderr
     XCTAssertTrue(result.stderr.contains("WARNING"))
   }
 
   func testListNamespaces() {
-    _ = run(["--set", testNamespace, "TEST_KEY"], input: "val\n")
+    _ = run(["--set", testNamespace1, "TEST_KEY"], input: "val\n")
     let result = run(["--list"])
     XCTAssertEqual(result.exitCode, 0)
-    XCTAssertTrue(result.stdout.contains(testNamespace))
+    XCTAssertTrue(result.stdout.contains(testNamespace1))
   }
 
   func testOverwriteValue() {
-    _ = run(["--set", testNamespace, "TEST_KEY"], input: "first\n")
-    _ = run(["--set", testNamespace, "TEST_KEY"], input: "second\n")
-    let listResult = run(["--list", "-v", testNamespace])
+    _ = run(["--set", testNamespace1, "TEST_KEY"], input: "first\n")
+    _ = run(["--set", testNamespace1, "TEST_KEY"], input: "second\n")
+    let listResult = run(["--list", "-v", testNamespace1])
     XCTAssertEqual(listResult.exitCode, 0)
     XCTAssertTrue(listResult.stdout.contains("TEST_KEY=second"))
     XCTAssertFalse(listResult.stdout.contains("TEST_KEY=first"))
   }
 
   func testSetRequiresTooFewArgs() {
-    let result = run(["--set", testNamespace])
-    XCTAssertEqual(result.exitCode, 2)
+    let result = run(["--set", testNamespace1])
+    XCTAssertNotEqual(result.exitCode, 0)
   }
 
   func testUnsetRequiresTooFewArgs() {
-    let result = run(["--unset", testNamespace])
-    XCTAssertEqual(result.exitCode, 2)
+    let result = run(["--unset", testNamespace1])
+    XCTAssertNotEqual(result.exitCode, 0)
   }
 
   func testExecRequiresCommand() {
-    let result = run([testNamespace])
-    XCTAssertEqual(result.exitCode, 2)
+    let result = run([testNamespace1])
+    XCTAssertNotEqual(result.exitCode, 0)
   }
 
   func testJSONOutput() {
     _ = run(
-      ["--set", testNamespace, "KEY_A", "KEY_B"], input: "val_a\nval_b\n")
-    let result = run(["--json", testNamespace])
+      ["--set", testNamespace1, "KEY_A", "KEY_B"], input: "val_a\nval_b\n")
+    let result = run(["--json", testNamespace1])
     XCTAssertEqual(result.exitCode, 0)
     let data = result.stdout.data(using: .utf8)!
     let dict =
@@ -177,8 +182,8 @@ final class EnvchainTests: XCTestCase {
   }
 
   func testJSONPreservesKeyCase() {
-    _ = run(["--set", testNamespace, "mixedCase_Key"], input: "hello\n")
-    let result = run(["--json", testNamespace])
+    _ = run(["--set", testNamespace1, "mixedCase_Key"], input: "hello\n")
+    let result = run(["--json", testNamespace1])
     XCTAssertEqual(result.exitCode, 0)
     XCTAssertEqual(
       result.stdout.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -186,7 +191,7 @@ final class EnvchainTests: XCTestCase {
   }
 
   func testJSONUndefinedNamespace() {
-    let result = run(["--json", "nonexistent-ns-\(testNamespace)"])
+    let result = run(["--json", "nonexistent-ns-\(testNamespace1)"])
     XCTAssertEqual(result.exitCode, 1)
     XCTAssertTrue(result.stderr.contains("WARNING"))
   }
@@ -194,11 +199,11 @@ final class EnvchainTests: XCTestCase {
   func testAWSCredential() {
     _ = run(
       [
-        "--set", testNamespace, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+        "--set", testNamespace1, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
         "AWS_SESSION_TOKEN",
       ],
       input: "AKID123\nsecret456\ntoken789\n")
-    let result = run(["--aws-credential", testNamespace])
+    let result = run(["--aws-credential", testNamespace1])
     XCTAssertEqual(result.exitCode, 0)
     let data = result.stdout.data(using: .utf8)!
     let cred = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -210,9 +215,9 @@ final class EnvchainTests: XCTestCase {
 
   func testAWSCredentialWithoutOptionalFields() {
     _ = run(
-      ["--set", testNamespace, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+      ["--set", testNamespace1, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
       input: "AKID123\nsecret456\n")
-    let result = run(["--aws-credential", testNamespace])
+    let result = run(["--aws-credential", testNamespace1])
     XCTAssertEqual(result.exitCode, 0)
     let data = result.stdout.data(using: .utf8)!
     let cred = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -224,7 +229,7 @@ final class EnvchainTests: XCTestCase {
   }
 
   func testAWSCredentialUndefinedNamespace() {
-    let result = run(["--aws-credential", "nonexistent-ns-\(testNamespace)"])
+    let result = run(["--aws-credential", "nonexistent-ns-\(testNamespace1)"])
     XCTAssertEqual(result.exitCode, 1)
     XCTAssertTrue(result.stderr.contains("WARNING"))
   }
@@ -232,45 +237,45 @@ final class EnvchainTests: XCTestCase {
   // MARK: - Env key validation tests
 
   func testValidEnvKeyAcceptsUppercase() {
-    let result = run(["--set", testNamespace, "FOO"], input: "val\n")
+    let result = run(["--set", testNamespace1, "FOO"], input: "val\n")
     XCTAssertEqual(result.exitCode, 0)
-    _ = run(["--unset", testNamespace, "FOO"])
+    _ = run(["--unset", testNamespace1, "FOO"])
   }
 
   func testValidEnvKeyAcceptsUnderscorePrefix() {
-    let result = run(["--set", testNamespace, "_BAR2"], input: "val\n")
+    let result = run(["--set", testNamespace1, "_BAR2"], input: "val\n")
     XCTAssertEqual(result.exitCode, 0)
-    _ = run(["--unset", testNamespace, "_BAR2"])
+    _ = run(["--unset", testNamespace1, "_BAR2"])
   }
 
   func testInvalidEnvKeyRejectsDigitStart() {
-    let result = run(["--set", testNamespace, "1BADKEY"], input: "val\n")
-    XCTAssertEqual(result.exitCode, 1)
+    let result = run(["--set", testNamespace1, "1BADKEY"], input: "val\n")
+    XCTAssertNotEqual(result.exitCode, 0)
     XCTAssertTrue(result.stderr.contains("Invalid environment variable name"))
   }
 
   func testInvalidEnvKeyRejectsDash() {
-    let result = run(["--set", testNamespace, "BAD-NAME"], input: "val\n")
-    XCTAssertEqual(result.exitCode, 1)
+    let result = run(["--set", testNamespace1, "BAD-NAME"], input: "val\n")
+    XCTAssertNotEqual(result.exitCode, 0)
     XCTAssertTrue(result.stderr.contains("Invalid environment variable name"))
   }
 
   func testInvalidEnvKeyRejectsSpace() {
-    let result = run(["--set", testNamespace, "BAD NAME"], input: "val\n")
-    XCTAssertEqual(result.exitCode, 1)
+    let result = run(["--set", testNamespace1, "BAD NAME"], input: "val\n")
+    XCTAssertNotEqual(result.exitCode, 0)
     XCTAssertTrue(result.stderr.contains("Invalid environment variable name"))
   }
 
   func testDeniedEnvKeyLDPreload() {
-    let result = run(["--set", testNamespace, "LD_PRELOAD"], input: "val\n")
-    XCTAssertEqual(result.exitCode, 1)
+    let result = run(["--set", testNamespace1, "LD_PRELOAD"], input: "val\n")
+    XCTAssertNotEqual(result.exitCode, 0)
     XCTAssertTrue(result.stderr.contains("Invalid environment variable name"))
   }
 
   func testDeniedEnvKeyDYLDInsertLibraries() {
     let result = run(
-      ["--set", testNamespace, "DYLD_INSERT_LIBRARIES"], input: "val\n")
-    XCTAssertEqual(result.exitCode, 1)
+      ["--set", testNamespace1, "DYLD_INSERT_LIBRARIES"], input: "val\n")
+    XCTAssertNotEqual(result.exitCode, 0)
     XCTAssertTrue(result.stderr.contains("Invalid environment variable name"))
   }
 }

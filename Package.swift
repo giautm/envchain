@@ -27,6 +27,9 @@ let package = Package(
       targets: ["envchain"]
     )
   ],
+  dependencies: [
+    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
+  ],
   targets: [
     .target(
       name: "CVersion",
@@ -47,7 +50,8 @@ let package = Package(
       name: "envchain",
       dependencies: [
         .target(name: "CVersion"),
-        .target(name: "CLibSecret", condition: .when(platforms: [.linux]))
+        .target(name: "CLibSecret", condition: .when(platforms: [.linux])),
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ],
       path: "Sources/envchain"
     ),

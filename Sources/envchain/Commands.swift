@@ -1,4 +1,5 @@
 @preconcurrency import Foundation
+import ArgumentParser
 
 private let deniedEnvKeys: Set<String> = [
   "LD_PRELOAD", "LD_LIBRARY_PATH",
@@ -22,11 +23,9 @@ private func isValidEnvKey(_ key: String) -> Bool {
   guard let first = scalars.first else {
     return false
   }
-  // First character must be ASCII letter or underscore
   guard first.isASCIILetter || first == "_" else {
     return false
   }
-  // Remaining characters must be ASCII letters, digits, or underscore
   for ch in scalars.dropFirst() {
     guard ch.isASCIILetter || ch.isASCIIDigit || ch == "_" else {
       return false
@@ -42,264 +41,302 @@ private func isValidNamespace(_ name: String) -> Bool {
   return true
 }
 
-func cmdSet(args: ArraySlice<String>) -> Int32 {
-  var argv = Array(args)
-  var noecho = false
-  var requirePassphrase = -1
-
-  while argv.count > 2 {
-    guard argv[0].hasPrefix("-") else {
-      break
-    }
-    if argv[0] == "-n" || argv[0] == "--noecho" {
-      argv.removeFirst()
-      noecho = true
-    } else if argv[0] == "-p" || argv[0] == "--require-passphrase" {
-      argv.removeFirst()
-      requirePassphrase = 1
-    } else if argv[0] == "-P" || argv[0] == "--no-require-passphrase" {
-      argv.removeFirst()
-      requirePassphrase = 0
-    } else {
-      print("Unknown option: \(argv[0])", to: &stdError)
-      return 1
-    }
-  }
-  if argv.count < 2 {
-    printHelp()
-    return 2
-  }
-  let name = argv[0]
-  guard isValidNamespace(name) else {
-    print("Invalid namespace name: \(name)", to: &stdError)
-    return 1
-  }
-  argv.removeFirst()
-  for key in argv {
-    guard isValidEnvKey(key) else {
-      print("Invalid environment variable name: \(key)", to: &stdError)
-      return 1
-    }
-    guard let value = askValue(name: name, key: key, noecho: noecho) else {
-      return 1
-    }
-    Keychain.saveValue(
-      namespace: name, key: key, value: value,
-      requirePassphrase: requirePassphrase)
-  }
-  return 0
+private func warnNamespaceNotDefined(_ namespace: String) {
+  print("WARNING: namespace `\(namespace)` not defined.", to: &stdError)
+  print(
+    "     You can set via running `envchain set \(namespace) SOME_ENV_NAME`.\n",
+    to: &stdError)
 }
 
-func cmdList(args: ArraySlice<String>) -> Int32 {
-  var argv = Array(args)
-  var showValue = false
-  var target: String? = nil
-  while !argv.isEmpty {
-    if argv[0] == "--show-value" || argv[0] == "-v" {
-      argv.removeFirst()
-      showValue = true
-    } else {
-      if target != nil {
-        printHelp()
-        return 2
+// MARK: - Set
+
+extension Envchain {
+  struct Set: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      abstract: "Add keychain items for a namespace"
+    )
+
+    @Flag(name: [.short, .customLong("noecho")],
+          help: "Do not echo input when prompting")
+    var noecho = false
+
+    @Flag(name: [.customShort("p"), .customLong("require-passphrase")],
+          help: "Require authentication to access the item")
+    var requirePassphrase = false
+
+    @Flag(name: [.customShort("P"), .customLong("no-require-passphrase")],
+          help: "Do not require authentication")
+    var noRequirePassphrase = false
+
+    @Argument(help: "The namespace to store variables in")
+    var namespace: String
+
+    @Argument(help: "Environment variable names to set")
+    var keys: [String]
+
+    mutating func validate() throws {
+      guard isValidNamespace(namespace) else {
+        throw ValidationError("Invalid namespace name: \(namespace)")
       }
-      target = argv[0]
-      argv.removeFirst()
+      for key in keys {
+        guard isValidEnvKey(key) else {
+          throw ValidationError("Invalid environment variable name: \(key)")
+        }
+      }
+    }
+
+    mutating func run() throws {
+      let passphrase: Int = requirePassphrase ? 1 : (noRequirePassphrase ? 0 : -1)
+      for key in keys {
+        guard let value = askValue(name: namespace, key: key, noecho: noecho) else {
+          throw ExitCode(1)
+        }
+        Keychain.saveValue(
+          namespace: namespace, key: key, value: value,
+          requirePassphrase: passphrase)
+      }
     }
   }
-  if let target = target {
-    guard isValidNamespace(target) else {
-      print("Invalid namespace name: \(target)", to: &stdError)
-      return 1
+}
+
+// MARK: - List
+
+extension Envchain {
+  struct List: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      abstract: "List namespaces or keys in a namespace"
+    )
+
+    @Flag(name: [.customShort("v"), .customLong("show-value")],
+          help: "Show values alongside keys")
+    var showValue = false
+
+    @Argument(help: "Namespace to list keys for (omit to list all namespaces)")
+    var namespace: String?
+
+    mutating func validate() throws {
+      if let namespace = namespace {
+        guard isValidNamespace(namespace) else {
+          throw ValidationError("Invalid namespace name: \(namespace)")
+        }
+      } else if showValue {
+        throw ValidationError("--show-value requires a namespace argument")
+      }
     }
-    let found = Keychain.searchValues(namespace: target) { key, value in
-      if showValue {
-        print("\(key)=\(value)")
+
+    mutating func run() throws {
+      if let namespace = namespace {
+        let found = Keychain.searchValues(namespace: namespace) { key, value in
+          if showValue {
+            print("\(key)=\(value)")
+          } else {
+            print(key)
+          }
+        }
+        if !found {
+          warnNamespaceNotDefined(namespace)
+        }
       } else {
-        print(key)
+        let namespaces = Keychain.searchNamespaces()
+        for ns in namespaces {
+          print(ns)
+        }
       }
     }
-    if !found {
-      print("WARNING: namespace `\(target)` not defined.", to: &stdError)
-      print(
-        "     You can set via running `\(CommandLine.arguments[0]) --set \(target) SOME_ENV_NAME`.\n",
-        to: &stdError)
-    }
-  } else {
-    if showValue {
-      printHelp()
-      return 2
-    }
-    let namespaces = Keychain.searchNamespaces()
-    for ns in namespaces {
-      print(ns)
-    }
   }
-  return 0
 }
 
-func cmdUnset(args: ArraySlice<String>) -> Int32 {
-  var argv = Array(args)
-  if argv.count < 2 {
-    printHelp()
-    return 2
-  }
-  let name = argv[0]
-  guard isValidNamespace(name) else {
-    print("Invalid namespace name: \(name)", to: &stdError)
-    return 1
-  }
-  argv.removeFirst()
-  for key in argv {
-    Keychain.deleteValue(namespace: name, key: key)
-  }
-  return 0
-}
+// MARK: - Unset
 
-func cmdJSON(args: ArraySlice<String>) -> Int32 {
-  let argv = Array(args)
-  if argv.isEmpty {
-    printHelp()
-    return 2
-  }
-  let name = argv[0]
-  guard isValidNamespace(name) else {
-    print("Invalid namespace name: \(name)", to: &stdError)
-    return 1
-  }
-  var dict: [String: String] = [:]
-  let found = Keychain.searchValues(namespace: name) { key, value in
-    dict[key] = value
-  }
-  if !found {
-    print("WARNING: namespace `\(name)` not defined.", to: &stdError)
-    print(
-      "     You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n",
-      to: &stdError)
-    return 1
-  }
-  guard
-    let data = try? JSONSerialization.data(
-      withJSONObject: dict, options: [.sortedKeys]),
-    let json = String(data: data, encoding: .utf8)
-  else {
-    print("Failed to serialize JSON", to: &stdError)
-    return 1
-  }
-  print(json)
-  return 0
-}
+extension Envchain {
+  struct Unset: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      abstract: "Remove keychain items from a namespace"
+    )
 
-func cmdAWSCredential(args: ArraySlice<String>) -> Int32 {
-  let argv = Array(args)
-  if argv.isEmpty {
-    printHelp()
-    return 2
-  }
-  let name = argv[0]
-  guard isValidNamespace(name) else {
-    print("Invalid namespace name: \(name)", to: &stdError)
-    return 1
-  }
-  var dict: [String: String] = [:]
-  let found = Keychain.searchValues(namespace: name) { key, value in
-    dict[key] = value
-  }
-  if !found {
-    print("WARNING: namespace `\(name)` not defined.", to: &stdError)
-    print(
-      "     You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n",
-      to: &stdError)
-    return 1
-  }
-  var credential: [String: Any] = ["Version": 1]
-  if let v = dict["AWS_ACCESS_KEY_ID"] {
-    credential["AccessKeyId"] = v
-  }
-  if let v = dict["AWS_SECRET_ACCESS_KEY"] {
-    credential["SecretAccessKey"] = v
-  }
-  if let v = dict["AWS_SESSION_TOKEN"] {
-    credential["SessionToken"] = v
-  }
-  if let v = dict["AWS_CREDENTIAL_EXPIRATION"] {
-    credential["Expiration"] = v
-  }
-  guard
-    let data = try? JSONSerialization.data(
-      withJSONObject: credential, options: [.sortedKeys]),
-    let json = String(data: data, encoding: .utf8)
-  else {
-    print("Failed to serialize JSON", to: &stdError)
-    return 1
-  }
-  print(json)
-  return 0
-}
+    @Argument(help: "The namespace to remove variables from")
+    var namespace: String
 
-func cmdExec(args: ArraySlice<String>) -> Int32 {
-  var argv = Array(args)
-  if argv.count < 2 {
-    printHelp()
-    return 2
-  }
-  let namespaceArg = argv[0]
-  argv.removeFirst()
-  let namespaces = namespaceArg.split(separator: ",").map(String.init)
-  for name in namespaces {
-    guard isValidNamespace(name) else {
-      print("Invalid namespace name: \(name)", to: &stdError)
-      return 1
-    }
-    let found = Keychain.searchValues(namespace: name) { key, value in
-      guard isValidEnvKey(key) else {
-        print(
-          "WARNING: skipping invalid key \"\(key)\" in namespace `\(name)`",
-          to: &stdError)
-        return
+    @Argument(help: "Environment variable names to remove")
+    var keys: [String]
+
+    mutating func validate() throws {
+      guard isValidNamespace(namespace) else {
+        throw ValidationError("Invalid namespace name: \(namespace)")
       }
-      setenv(key, value, 1)
     }
-    if !found {
-      print("WARNING: namespace `\(name)` not defined.", to: &stdError)
-      print(
-        "     You can set via running `\(CommandLine.arguments[0]) --set \(name) SOME_ENV_NAME`.\n",
-        to: &stdError)
-    }
-  }
-  let exe = argv[0]
-  var cArgs: [UnsafeMutablePointer<CChar>?] = []
-  for arg in argv {
-    guard let dup = strdup(arg) else {
-      for ptr in cArgs {
-        free(ptr)
+
+    mutating func run() throws {
+      for key in keys {
+        Keychain.deleteValue(namespace: namespace, key: key)
       }
-      print("Out of memory", to: &stdError)
-      return 1
     }
-    cArgs.append(dup)
   }
-  cArgs.append(nil)
-  execvp(exe, &cArgs)
-  let err = String(cString: strerror(errno))
-  for ptr in cArgs {
-    free(ptr)
+}
+
+// MARK: - JSON
+
+extension Envchain {
+  struct JSON: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      abstract: "Print all values in a namespace as JSON"
+    )
+
+    @Argument(help: "The namespace to print")
+    var namespace: String
+
+    mutating func validate() throws {
+      guard isValidNamespace(namespace) else {
+        throw ValidationError("Invalid namespace name: \(namespace)")
+      }
+    }
+
+    mutating func run() throws {
+      var dict: [String: String] = [:]
+      let found = Keychain.searchValues(namespace: namespace) { key, value in
+        dict[key] = value
+      }
+      if !found {
+        warnNamespaceNotDefined(namespace)
+        throw ExitCode(1)
+      }
+      guard
+        let data = try? JSONSerialization.data(
+          withJSONObject: dict, options: [.sortedKeys]),
+        let json = String(data: data, encoding: .utf8)
+      else {
+        throw ValidationError("Failed to serialize JSON")
+      }
+      print(json)
+    }
   }
-  print("execvp failed: \(err)", to: &stdError)
-  return 1
+}
+
+// MARK: - AWS Credential
+
+extension Envchain {
+  struct AWSCredential: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      commandName: "aws-credential",
+      abstract: "Output AWS credential_process JSON format"
+    )
+
+    @Argument(help: "The namespace containing AWS credentials")
+    var namespace: String
+
+    mutating func validate() throws {
+      guard isValidNamespace(namespace) else {
+        throw ValidationError("Invalid namespace name: \(namespace)")
+      }
+    }
+
+    mutating func run() throws {
+      var dict: [String: String] = [:]
+      let found = Keychain.searchValues(namespace: namespace) { key, value in
+        dict[key] = value
+      }
+      if !found {
+        warnNamespaceNotDefined(namespace)
+        throw ExitCode(1)
+      }
+      var credential: [String: Any] = ["Version": 1]
+      if let v = dict["AWS_ACCESS_KEY_ID"] {
+        credential["AccessKeyId"] = v
+      }
+      if let v = dict["AWS_SECRET_ACCESS_KEY"] {
+        credential["SecretAccessKey"] = v
+      }
+      if let v = dict["AWS_SESSION_TOKEN"] {
+        credential["SessionToken"] = v
+      }
+      if let v = dict["AWS_CREDENTIAL_EXPIRATION"] {
+        credential["Expiration"] = v
+      }
+      guard
+        let data = try? JSONSerialization.data(
+          withJSONObject: credential, options: [.sortedKeys]),
+        let json = String(data: data, encoding: .utf8)
+      else {
+        throw ValidationError("Failed to serialize JSON")
+      }
+      print(json)
+    }
+  }
+}
+
+// MARK: - Exec
+
+extension Envchain {
+  struct Exec: ParsableCommand {
+    static let configuration = CommandConfiguration(
+      abstract: "Execute a command with environment variables from namespaces"
+    )
+
+    @Argument(help: "Namespace(s) to load (comma-separated)",
+              transform: { $0.split(separator: ",").map(String.init) })
+    var namespaces: [String]
+
+    @Argument(parsing: .captureForPassthrough,
+              help: "Command and arguments to execute")
+    var command: [String]
+
+    mutating func validate() throws {
+      guard !command.isEmpty else {
+        throw ValidationError("A command is required")
+      }
+      for name in namespaces {
+        guard isValidNamespace(name) else {
+          throw ValidationError("Invalid namespace name: \(name)")
+        }
+      }
+    }
+
+    mutating func run() throws {
+      for name in namespaces {
+        let found = Keychain.searchValues(namespace: name) { key, value in
+          guard isValidEnvKey(key) else {
+            print(
+              "WARNING: skipping invalid key \"\(key)\" in namespace `\(name)`",
+              to: &stdError)
+            return
+          }
+          setenv(key, value, 1)
+        }
+        if !found {
+          warnNamespaceNotDefined(name)
+        }
+      }
+      let exe = command[0]
+      var cArgs: [UnsafeMutablePointer<CChar>?] = []
+      for arg in command {
+        guard let dup = strdup(arg) else {
+          for ptr in cArgs { free(ptr) }
+          throw ValidationError("Out of memory")
+        }
+        cArgs.append(dup)
+      }
+      cArgs.append(nil)
+      execvp(exe, &cArgs)
+      let err = String(cString: strerror(errno))
+      for ptr in cArgs { free(ptr) }
+      print("execvp failed: \(err)", to: &stdError)
+      throw ExitCode(1)
+    }
+  }
 }
 
 // MARK: - Input Helpers
 
 nonisolated(unsafe) private var savedTermios: termios?
 
-private func restoreTerminal(_: Int32) {
-  if var attrs = savedTermios {
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &attrs)
+func askValue(name: String, key: String, noecho: Bool) -> String? {
+  let prompt = "\(name).\(key)"
+  if noecho {
+    return noechoRead(prompt: prompt)
+  } else {
+    print("\(prompt): ", terminator: "", to: &stdError)
+    return readLine()
   }
-  let nl: [UInt8] = [0x0A]
-  nl.withUnsafeBufferPointer { _ = write(STDERR_FILENO, $0.baseAddress!, 1) }
-  _exit(130)
 }
 
 func noechoRead(prompt: String) -> String? {
@@ -333,12 +370,11 @@ func noechoRead(prompt: String) -> String? {
   return input
 }
 
-func askValue(name: String, key: String, noecho: Bool) -> String? {
-  let prompt = "\(name).\(key)"
-  if noecho {
-    return noechoRead(prompt: prompt)
-  } else {
-    print("\(prompt): ", terminator: "", to: &stdError)
-    return readLine()
+private func restoreTerminal(_: Int32) {
+  if var attrs = savedTermios {
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &attrs)
   }
+  let nl: [UInt8] = [0x0A]
+  nl.withUnsafeBufferPointer { _ = write(STDERR_FILENO, $0.baseAddress!, 1) }
+  _exit(130)
 }
