@@ -1,5 +1,5 @@
-@preconcurrency import Foundation
 import ArgumentParser
+@preconcurrency import Foundation
 
 private let deniedEnvKeys: Set<String> = [
   "LD_PRELOAD", "LD_LIBRARY_PATH",
@@ -56,16 +56,19 @@ extension Envchain {
       abstract: "Add keychain items for a namespace"
     )
 
-    @Flag(name: [.short, .customLong("noecho")],
-          help: "Do not echo input when prompting")
+    @Flag(
+      name: [.short, .customLong("noecho")],
+      help: "Do not echo input when prompting")
     var noecho = false
 
-    @Flag(name: [.customShort("p"), .customLong("require-passphrase")],
-          help: "Require authentication to access the item")
+    @Flag(
+      name: [.customShort("p"), .customLong("require-passphrase")],
+      help: "Require authentication to access the item")
     var requirePassphrase = false
 
-    @Flag(name: [.customShort("P"), .customLong("no-require-passphrase")],
-          help: "Do not require authentication")
+    @Flag(
+      name: [.customShort("P"), .customLong("no-require-passphrase")],
+      help: "Do not require authentication")
     var noRequirePassphrase = false
 
     @Argument(help: "The namespace to store variables in")
@@ -86,9 +89,11 @@ extension Envchain {
     }
 
     mutating func run() throws {
-      let passphrase: Int = requirePassphrase ? 1 : (noRequirePassphrase ? 0 : -1)
+      let passphrase: Int =
+        requirePassphrase ? 1 : (noRequirePassphrase ? 0 : -1)
       for key in keys {
-        guard let value = askValue(name: namespace, key: key, noecho: noecho) else {
+        guard let value = askValue(name: namespace, key: key, noecho: noecho)
+        else {
           throw ExitCode(1)
         }
         Keychain.saveValue(
@@ -107,8 +112,9 @@ extension Envchain {
       abstract: "List namespaces or keys in a namespace"
     )
 
-    @Flag(name: [.customShort("v"), .customLong("show-value")],
-          help: "Show values alongside keys")
+    @Flag(
+      name: [.customShort("v"), .customLong("show-value")],
+      help: "Show values alongside keys")
     var showValue = false
 
     @Argument(help: "Namespace to list keys for (omit to list all namespaces)")
@@ -272,12 +278,14 @@ extension Envchain {
       abstract: "Execute a command with environment variables from namespaces"
     )
 
-    @Argument(help: "Namespace(s) to load (comma-separated)",
-              transform: { $0.split(separator: ",").map(String.init) })
+    @Argument(
+      help: "Namespace(s) to load (comma-separated)",
+      transform: { $0.split(separator: ",").map(String.init) })
     var namespaces: [String]
 
-    @Argument(parsing: .captureForPassthrough,
-              help: "Command and arguments to execute")
+    @Argument(
+      parsing: .captureForPassthrough,
+      help: "Command and arguments to execute")
     var command: [String]
 
     mutating func validate() throws {

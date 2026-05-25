@@ -1,5 +1,5 @@
-@preconcurrency import Foundation
 import ArgumentParser
+@preconcurrency import Foundation
 
 struct StderrOutputStream: TextOutputStream {
   mutating func write(_ string: String) {
@@ -14,7 +14,14 @@ struct Envchain: ParsableCommand {
     commandName: "envchain",
     abstract: "Set environment variables from macOS Keychain",
     version: version,
-    subcommands: [Set.self, List.self, Unset.self, JSON.self, AWSCredential.self, Exec.self],
+    subcommands: [
+      Exec.self,
+      Set.self,
+      Unset.self,
+      List.self,
+      JSON.self,
+      AWSCredential.self,
+    ],
     defaultSubcommand: Exec.self
   )
 

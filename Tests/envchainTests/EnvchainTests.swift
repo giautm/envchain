@@ -66,7 +66,8 @@ final class EnvchainTests: XCTestCase {
   func testNoArgsShowsHelp() {
     let result = run([])
     XCTAssertNotEqual(result.exitCode, 0)
-    XCTAssertTrue(result.stderr.contains("USAGE:") || result.stderr.contains("Usage:"))
+    XCTAssertTrue(
+      result.stderr.contains("USAGE:") || result.stderr.contains("Usage:"))
   }
 
   func testUnknownOption() {
@@ -128,7 +129,8 @@ final class EnvchainTests: XCTestCase {
       "sh", "-c", "echo $KEY_A:$KEY_B",
     ])
     XCTAssertEqual(execResult.exitCode, 0)
-    let output = execResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    let output = execResult.stdout.trimmingCharacters(
+      in: .whitespacesAndNewlines)
     XCTAssertEqual(output, "alpha:beta")
   }
 
