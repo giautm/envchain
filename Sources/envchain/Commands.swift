@@ -319,7 +319,7 @@ extension Envchain {
       // execvp replaces the process on success,
       // and _exit terminates immediately on failure.
       var cArgs = command.map { strdup($0) } + [nil]
-      execvp(cArgs[0], &cArgs)
+      execvp(cArgs[0]!, &cArgs)
       // execvp only returns on failure
       perror(command[0])
       // Use _exit (not exit/throw) to terminate immediately

@@ -21,7 +21,11 @@ build:
 	swift build
 
 test:
+ifeq ($(OS),Linux)
 	eval "$$(dbus-launch --sh-syntax)" && echo "" | gnome-keyring-daemon --unlock --components=secrets && swift test
+else
+	swift test
+endif
 
 package: all
 	mkdir -p $(DIST_DIR)
