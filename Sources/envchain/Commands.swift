@@ -314,21 +314,19 @@ extension Envchain {
           warnNamespaceNotDefined(name)
         }
       }
-      let exe = command[0]
-      var cArgs: [UnsafeMutablePointer<CChar>?] = []
-      for arg in command {
-        guard let dup = strdup(arg) else {
-          for ptr in cArgs { free(ptr) }
-          throw ValidationError("Out of memory")
-        }
-        cArgs.append(dup)
-      }
-      cArgs.append(nil)
-      execvp(exe, &cArgs)
-      let err = String(cString: strerror(errno))
-      for ptr in cArgs { free(ptr) }
-      print("execvp failed: \(err)", to: &stdError)
-      throw ExitCode(1)
+      // Build a null-terminated C string array for execvp.
+      // Memory from strdup is intentionally never freed —
+      // execvp replaces the process on success,
+      // and _exit terminates immediately on failure.
+      var cArgs = command.map { strdup($0) } + [nil]
+      execvp(cArgs[0], &cArgs)
+      // execvp only returns on failure
+      perror(command[0])
+      // Use _exit (not exit/throw) to terminate immediately
+      // without running Swift deinitializers, atexit handlers,
+      // or flushing buffers that may contain secret values
+      // loaded into the environment above.
+      _exit(127)
     }
   }
 }
