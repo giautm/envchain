@@ -1,5 +1,5 @@
 import ArgumentParser
-@preconcurrency import Foundation
+import Foundation
 
 struct StderrOutputStream: TextOutputStream {
   mutating func write(_ string: String) {

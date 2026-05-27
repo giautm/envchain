@@ -4,15 +4,15 @@ import Security
 
 private let servicePrefix = "envchain-"
 
-struct Keychain {
+struct Keychain: SecretBackend {
   static func serviceName(for namespace: String) -> String {
     "\(servicePrefix)\(namespace)"
   }
 
-  static func saveValue(
+  func saveValue(
     namespace: String, key: String, value: String, requirePassphrase: Int
   ) {
-    let service = serviceName(for: namespace)
+    let service = Keychain.serviceName(for: namespace)
     let valueData = value.data(using: .utf8)!
     let searchQuery: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
@@ -48,14 +48,14 @@ struct Keychain {
     }
     status = SecItemAdd(newItem as CFDictionary, nil)
     if status != errSecSuccess {
-      failWithOSStatus(status)
+      Keychain.failWithOSStatus(status)
     }
   }
 
-  static func searchValues(
-    namespace: String, callback: (String, String) -> Void
-  ) -> Bool {
-    let service = serviceName(for: namespace)
+  func searchValues(
+    namespace: String
+  ) throws -> (values: [String: String], found: Bool) {
+    let service = Keychain.serviceName(for: namespace)
     let listQuery: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
@@ -65,14 +65,15 @@ struct Keychain {
     var listResult: AnyObject?
     let listStatus = SecItemCopyMatching(listQuery as CFDictionary, &listResult)
     if listStatus == errSecItemNotFound {
-      return false
+      return ([:], false)
     }
     if listStatus != errSecSuccess {
-      failWithOSStatus(listStatus)
+      Keychain.failWithOSStatus(listStatus)
     }
     guard let items = listResult as? [[String: Any]] else {
-      return false
+      return ([:], false)
     }
+    var values: [String: String] = [:]
     for item in items {
       guard let account = item[kSecAttrAccount as String] as? String else {
         continue
@@ -93,12 +94,12 @@ struct Keychain {
       else {
         continue
       }
-      callback(account, value)
+      values[account] = value
     }
-    return true
+    return (values, true)
   }
 
-  static func searchNamespaces() -> [String] {
+  func searchNamespaces() -> [String] {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrDescription as String: "envchain",
@@ -111,7 +112,7 @@ struct Keychain {
       return []
     }
     if status != errSecSuccess {
-      failWithOSStatus(status)
+      Keychain.failWithOSStatus(status)
     }
     guard let items = result as? [[String: Any]] else {
       return []
@@ -128,8 +129,8 @@ struct Keychain {
     return names.sorted()
   }
 
-  static func deleteValue(namespace: String, key: String) {
-    let service = serviceName(for: namespace)
+  func deleteValue(namespace: String, key: String) {
+    let service = Keychain.serviceName(for: namespace)
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,

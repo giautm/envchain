@@ -1,45 +1,5 @@
 import ArgumentParser
-@preconcurrency import Foundation
-
-private let deniedEnvKeys: Set<String> = [
-  "LD_PRELOAD", "LD_LIBRARY_PATH",
-  "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH",
-]
-
-extension Unicode.Scalar {
-  fileprivate var isASCIILetter: Bool {
-    ("A"..."Z") ~= self || ("a"..."z") ~= self
-  }
-  fileprivate var isASCIIDigit: Bool {
-    ("0"..."9") ~= self
-  }
-}
-
-private func isValidEnvKey(_ key: String) -> Bool {
-  guard !key.isEmpty else {
-    return false
-  }
-  let scalars = key.unicodeScalars
-  guard let first = scalars.first else {
-    return false
-  }
-  guard first.isASCIILetter || first == "_" else {
-    return false
-  }
-  for ch in scalars.dropFirst() {
-    guard ch.isASCIILetter || ch.isASCIIDigit || ch == "_" else {
-      return false
-    }
-  }
-  return !deniedEnvKeys.contains(key)
-}
-
-private func isValidNamespace(_ name: String) -> Bool {
-  guard !name.isEmpty, !name.contains("\0"), name.utf8.count <= 255 else {
-    return false
-  }
-  return true
-}
+import Foundation
 
 private func warnNamespaceNotDefined(_ namespace: String) {
   print("WARNING: namespace `\(namespace)` not defined.", to: &stdError)
@@ -77,18 +37,8 @@ extension Envchain {
     @Argument(help: "Environment variable names to set")
     var keys: [String]
 
-    mutating func validate() throws {
-      guard isValidNamespace(namespace) else {
-        throw ValidationError("Invalid namespace name: \(namespace)")
-      }
-      for key in keys {
-        guard isValidEnvKey(key) else {
-          throw ValidationError("Invalid environment variable name: \(key)")
-        }
-      }
-    }
-
     mutating func run() throws {
+      let backend = currentBackend()
       let passphrase: Int =
         requirePassphrase ? 1 : (noRequirePassphrase ? 0 : -1)
       for key in keys {
@@ -96,7 +46,7 @@ extension Envchain {
         else {
           throw ExitCode(1)
         }
-        Keychain.saveValue(
+        try backend.saveValue(
           namespace: namespace, key: key, value: value,
           requirePassphrase: passphrase)
       }
@@ -121,29 +71,28 @@ extension Envchain {
     var namespace: String?
 
     mutating func validate() throws {
-      if let namespace = namespace {
-        guard isValidNamespace(namespace) else {
-          throw ValidationError("Invalid namespace name: \(namespace)")
-        }
-      } else if showValue {
+      if namespace == nil && showValue {
         throw ValidationError("--show-value requires a namespace argument")
       }
     }
 
     mutating func run() throws {
+      let backend = currentBackend()
       if let namespace = namespace {
-        let found = Keychain.searchValues(namespace: namespace) { key, value in
-          if showValue {
-            print("\(key)=\(value)")
-          } else {
-            print(key)
+        let result = try backend.searchValues(namespace: namespace)
+        if result.found {
+          for (key, value) in result.values.sorted(by: { $0.key < $1.key }) {
+            if showValue {
+              print("\(key)=\(value)")
+            } else {
+              print(key)
+            }
           }
-        }
-        if !found {
+        } else {
           warnNamespaceNotDefined(namespace)
         }
       } else {
-        let namespaces = Keychain.searchNamespaces()
+        let namespaces = try backend.searchNamespaces()
         for ns in namespaces {
           print(ns)
         }
@@ -166,15 +115,10 @@ extension Envchain {
     @Argument(help: "Environment variable names to remove")
     var keys: [String]
 
-    mutating func validate() throws {
-      guard isValidNamespace(namespace) else {
-        throw ValidationError("Invalid namespace name: \(namespace)")
-      }
-    }
-
     mutating func run() throws {
+      let backend = currentBackend()
       for key in keys {
-        Keychain.deleteValue(namespace: namespace, key: key)
+        try backend.deleteValue(namespace: namespace, key: key)
       }
     }
   }
@@ -191,24 +135,16 @@ extension Envchain {
     @Argument(help: "The namespace to print")
     var namespace: String
 
-    mutating func validate() throws {
-      guard isValidNamespace(namespace) else {
-        throw ValidationError("Invalid namespace name: \(namespace)")
-      }
-    }
-
     mutating func run() throws {
-      var dict: [String: String] = [:]
-      let found = Keychain.searchValues(namespace: namespace) { key, value in
-        dict[key] = value
-      }
-      if !found {
+      let backend = currentBackend()
+      let result = try backend.searchValues(namespace: namespace)
+      if !result.found {
         warnNamespaceNotDefined(namespace)
         throw ExitCode(1)
       }
       guard
         let data = try? JSONSerialization.data(
-          withJSONObject: dict, options: [.sortedKeys]),
+          withJSONObject: result.values, options: [.sortedKeys]),
         let json = String(data: data, encoding: .utf8)
       else {
         throw ValidationError("Failed to serialize JSON")
@@ -230,32 +166,24 @@ extension Envchain {
     @Argument(help: "The namespace containing AWS credentials")
     var namespace: String
 
-    mutating func validate() throws {
-      guard isValidNamespace(namespace) else {
-        throw ValidationError("Invalid namespace name: \(namespace)")
-      }
-    }
-
     mutating func run() throws {
-      var dict: [String: String] = [:]
-      let found = Keychain.searchValues(namespace: namespace) { key, value in
-        dict[key] = value
-      }
-      if !found {
+      let backend = currentBackend()
+      let result = try backend.searchValues(namespace: namespace)
+      if !result.found {
         warnNamespaceNotDefined(namespace)
         throw ExitCode(1)
       }
       var credential: [String: Any] = ["Version": 1]
-      if let v = dict["AWS_ACCESS_KEY_ID"] {
+      if let v = result.values["AWS_ACCESS_KEY_ID"] {
         credential["AccessKeyId"] = v
       }
-      if let v = dict["AWS_SECRET_ACCESS_KEY"] {
+      if let v = result.values["AWS_SECRET_ACCESS_KEY"] {
         credential["SecretAccessKey"] = v
       }
-      if let v = dict["AWS_SESSION_TOKEN"] {
+      if let v = result.values["AWS_SESSION_TOKEN"] {
         credential["SessionToken"] = v
       }
-      if let v = dict["AWS_CREDENTIAL_EXPIRATION"] {
+      if let v = result.values["AWS_CREDENTIAL_EXPIRATION"] {
         credential["Expiration"] = v
       }
       guard
@@ -292,25 +220,23 @@ extension Envchain {
       guard !command.isEmpty else {
         throw ValidationError("A command is required")
       }
-      for name in namespaces {
-        guard isValidNamespace(name) else {
-          throw ValidationError("Invalid namespace name: \(name)")
-        }
-      }
     }
 
     mutating func run() throws {
+      let backend = currentBackend()
       for name in namespaces {
-        let found = Keychain.searchValues(namespace: name) { key, value in
-          guard isValidEnvKey(key) else {
-            print(
-              "WARNING: skipping invalid key \"\(key)\" in namespace `\(name)`",
-              to: &stdError)
-            return
+        let result = try backend.searchValues(namespace: name)
+        if result.found {
+          for (key, value) in result.values {
+            guard isValidEnvKey(key) else {
+              print(
+                "WARNING: skipping invalid key \"\(key)\" in namespace `\(name)`",
+                to: &stdError)
+              continue
+            }
+            setenv(key, value, 1)
           }
-          setenv(key, value, 1)
-        }
-        if !found {
+        } else {
           warnNamespaceNotDefined(name)
         }
       }

@@ -1,10 +1,10 @@
 #if os(Linux)
-@preconcurrency import Foundation
+import Foundation
 import CLibSecret
 
 private let servicePrefix = "envchain-"
 
-struct Keychain {
+struct Keychain: SecretBackend {
   static func serviceName(for namespace: String) -> String {
     "\(servicePrefix)\(namespace)"
   }
@@ -37,7 +37,7 @@ struct Keychain {
       return schema
     }()
 
-  static func saveValue(
+  func saveValue(
     namespace: String, key: String, value: String, requirePassphrase: Int
   ) {
     if requirePassphrase == 1 {
@@ -45,11 +45,11 @@ struct Keychain {
         "WARNING: --require-passphrase is not supported on Linux; ignoring.",
         to: &stdError)
     }
-    let service = serviceName(for: namespace)
+    let service = Keychain.serviceName(for: namespace)
     let label = "\(service) - \(key)"
     var error: UnsafeMutablePointer<GError>?
     envchain_secret_password_store(
-      schema, SECRET_COLLECTION_DEFAULT,
+      Keychain.schema, SECRET_COLLECTION_DEFAULT,
       label, value, &error, service, key)
     if let error = error {
       print("Error: \(String(cString: error.pointee.message))", to: &stdError)
@@ -58,25 +58,25 @@ struct Keychain {
     }
   }
 
-  static func searchValues(
-    namespace: String, callback: (String, String) -> Void
-  ) -> Bool {
-    let service = serviceName(for: namespace)
+  func searchValues(
+    namespace: String
+  ) throws -> (values: [String: String], found: Bool) {
+    let service = Keychain.serviceName(for: namespace)
     var error: UnsafeMutablePointer<GError>?
     let flags = SecretSearchFlags(
       rawValue: SECRET_SEARCH_ALL.rawValue | SECRET_SEARCH_UNLOCK.rawValue
         | SECRET_SEARCH_LOAD_SECRETS.rawValue)
     let items: UnsafeMutablePointer<GList>? = envchain_secret_password_search(
-      schema, flags, &error, service)
+      Keychain.schema, flags, &error, service)
     if let error = error {
       print("Error: \(String(cString: error.pointee.message))", to: &stdError)
       g_error_free(error)
       exit(10)
     }
     guard let items = items else {
-      return false
+      return ([:], false)
     }
-    var found = false
+    var values: [String: String] = [:]
     var current: UnsafeMutablePointer<GList>? = items
     while let item = current?.pointee.data {
       defer {
@@ -103,20 +103,19 @@ struct Keychain {
       guard let text = secret_value_get_text(value) else {
         continue
       }
-      callback(accountStr, String(cString: text))
-      found = true
+      values[accountStr] = String(cString: text)
     }
     g_list_free_full(items, g_object_unref)
-    return found
+    return (values, !values.isEmpty)
   }
 
-  static func searchNamespaces() -> [String] {
+  func searchNamespaces() -> [String] {
     var error: UnsafeMutablePointer<GError>?
     let flags = SecretSearchFlags(
       rawValue: SECRET_SEARCH_ALL.rawValue | SECRET_SEARCH_UNLOCK.rawValue)
     let items: UnsafeMutablePointer<GList>? =
       envchain_secret_password_search_all(
-        schema, flags, &error)
+        Keychain.schema, flags, &error)
     if let error = error {
       g_error_free(error)
       return []
@@ -151,11 +150,11 @@ struct Keychain {
     return names.sorted()
   }
 
-  static func deleteValue(namespace: String, key: String) {
-    let service = serviceName(for: namespace)
+  func deleteValue(namespace: String, key: String) {
+    let service = Keychain.serviceName(for: namespace)
     var error: UnsafeMutablePointer<GError>?
     _ = envchain_secret_password_clear(
-      schema, &error, service, key)
+      Keychain.schema, &error, service, key)
     if let error = error {
       g_error_free(error)
     }

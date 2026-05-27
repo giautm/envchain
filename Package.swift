@@ -3,17 +3,17 @@ import Foundation
 import PackageDescription
 
 let gitVersion: String = {
-    let pipe = Pipe()
-    let proc = Process()
-    proc.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-    proc.arguments = ["describe", "--tags", "--always"]
-    proc.standardOutput = pipe
-    proc.standardError = FileHandle.nullDevice
-    try? proc.run()
-    proc.waitUntilExit()
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    return String(data: data, encoding: .utf8)?
-        .trimmingCharacters(in: .whitespacesAndNewlines) ?? "dev"
+  let pipe = Pipe()
+  let proc = Process()
+  proc.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+  proc.arguments = ["describe", "--tags", "--always"]
+  proc.standardOutput = pipe
+  proc.standardError = FileHandle.nullDevice
+  try? proc.run()
+  proc.waitUntilExit()
+  let data = pipe.fileHandleForReading.readDataToEndOfFile()
+  return String(data: data, encoding: .utf8)?
+    .trimmingCharacters(in: .whitespacesAndNewlines) ?? "dev"
 }()
 
 let package = Package(
@@ -28,7 +28,8 @@ let package = Package(
     )
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
+    .package(
+      url: "https://github.com/apple/swift-argument-parser", from: "1.0.0")
   ],
   targets: [
     .target(
